@@ -1,47 +1,121 @@
-import React, { useState } from "react";
-import { Box, Grid, Typography, Button, Paper, TextField } from "@mui/material";
-import Sidebar from "../components/Sidebar";
-import ChatPromptCards from "../components/ChatPromptCards";
-import ChatMessages from "../components/ChatMessages";
+import { Stack } from "@mui/material";
+import { useContext, useEffect, useRef, useState } from "react";
+import { useOutletContext } from "react-router-dom";
+import data from "../constants/aiData/sampleData.json";
 import ChatInput from "../components/ChatInput";
-import logo from "../asstes/Ai-Logo.png"; // placeholder
+import ChatCard from "../components/ChatCard";
+import FeedbackModal from "../components/FeedbackModal";
+import InitialChat from "../components/InitialChat/InitialChat";
+import Navbar from "../components/Navbar";
+import { ThemeContext } from "../theme/themeContext";
 
 export default function Main() {
-  const [chat, setChat] = useState([]);
-  const [input, setInput] = useState("");
+  const [showModal, setShowModal] = useState(false);
+  const listRef = useRef(null);
+  const [chatId, setChatId] = useState(1);
+  const [selectedChatId, setSelectedChatId] = useState(null);
+  const [scrollToBottom, setScrollToBottom] = useState(false);
+  const { chat, setChat } = useOutletContext();
+  const { mode } = useContext(ThemeContext);
 
-  const handleAsk = () => {
-    if (!input.trim()) return;
-    const newEntry = { user: "You", message: input };
-    const aiResponse = { user: "Bot AI", message: `Response to: ${input}` };
-    setChat([...chat, newEntry, aiResponse]);
-    setInput("");
+  // GENERATING AI RESPONSE
+  const generateResponse = (input) => {
+    const response = data.find(
+      (item) => input?.toLowerCase() === item?.question?.toLowerCase()
+    );
+
+    let answer = "Sorry, Did not understand your query!";
+
+    if (response !== undefined) {
+      answer = response.response;
+    }
+
+    setChat((prev) => [
+      ...prev,
+      {
+        type: "Human",
+        text: input,
+        time: new Date(),
+        id: chatId,
+      },
+      {
+        type: "AI",
+        text: answer,
+        time: new Date(),
+        id: chatId + 1,
+      },
+    ]);
+
+    setChatId((prev) => prev + 2);
   };
 
-  const handleSave = () => {
-    localStorage.setItem("chatHistory", JSON.stringify(chat));
-    alert("Chat saved!");
-  };
+  //AUTOSCROLL TO LAST ELEMENT
+  useEffect(() => {
+    listRef.current?.lastElementChild?.scrollIntoView();
+  }, [scrollToBottom]);
 
   return (
-    <Grid container>
-      <Grid item xs={12} md={3} sx={{ backgroundColor: "#E5DAF8", minHeight: "100vh" }}>
-        <Sidebar />
-      </Grid>
-      <Grid item xs={12} md={9} p={3}>
-        <Typography variant="h5" fontWeight="bold">How Can I Help You Today?</Typography>
-        <Box my={2} display="flex" justifyContent="center">
-          <img src={logo} alt="logo" style={{ borderRadius: "50%", width: 60 }} />
-        </Box>
-        {chat.length === 0 && <ChatPromptCards onSelect={setInput} />}
-        <ChatMessages chat={chat} />
-        <ChatInput
-          input={input}
-          setInput={setInput}
-          onAsk={handleAsk}
-          onSave={handleSave}
-        />
-      </Grid>
-    </Grid>
+    <Stack
+      height={"100vh"}
+      justifyContent={"space-between"}
+      sx={{
+        "@media (max-width:767px)": {
+          background:
+            mode === "light" ? "linear-gradient(#F9FAFA 60%, #EDE4FF)" : "",
+        },
+      }}
+    >
+      <Navbar />
+
+      {chat.length === 0 && <InitialChat generateResponse={generateResponse} />}
+
+      {chat.length > 0 && (
+        <Stack
+          height={1}
+          flexGrow={0}
+          p={{ xs: 2, md: 3 }}
+          spacing={{ xs: 2, md: 3 }}
+          sx={{
+            overflowY: "auto",
+            "&::-webkit-scrollbar": {
+              width: "10px",
+            },
+            "&::-webkit-scrollbar-track": {
+              boxShadow: "inset 0 0 8px rgba(0,0,0,0.1)",
+              borderRadius: "8px",
+            },
+            "&::-webkit-scrollbar-thumb": {
+              backgroundColor: "rgba(151, 133, 186,0.4)",
+              borderRadius: "8px",
+            },
+          }}
+          ref={listRef}
+        >
+          {chat.map((item, index) => (
+            <ChatCard
+              details={item}
+              key={index}
+              updateChat={setChat}
+              setSelectedChatId={setSelectedChatId}
+              showFeedbackModal={() => setShowModal(true)}
+            />
+          ))}
+        </Stack>
+      )}
+
+      <ChatInput
+        generateResponse={generateResponse}
+        setScroll={setScrollToBottom}
+        chat={chat}
+        clearChat={() => setChat([])}
+      />
+
+      <FeedbackModal
+        open={showModal}
+        updateChat={setChat}
+        chatId={selectedChatId}
+        handleClose={() => setShowModal(false)}
+      />
+    </Stack>
   );
 }
